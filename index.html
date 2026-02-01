@@ -1,4 +1,4 @@
-<!DOCTYPE  html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -289,7 +289,7 @@ function drawRect(corners, color, w=5){
   ctx.closePath(); ctx.stroke();
   ctx.restore();
 }
-function drawFaceLine(center, angle, len=110, color="rgba(255,255,255,0.95)", w=6){
+function drawFaceLine(center, angle, len=110, color="rgba(0,255,0,0.95)", w=6){
   if(!center || angle==null) return;
   const L=len/2;
   const x1=center.x - Math.cos(angle)*L;
@@ -600,19 +600,24 @@ async function loop(){
 
   updateFPS();
 
-  // Initialize background on first frame
-  if(!bg){ bg=grab(); tracking=true; }
-
   if(state === "RESULT"){
     currentTrackedRect=null;
     badge.style.opacity=0;
     return;
   }
 
-  // Always run detection (identical to Arc-TEST-TRACK)
+  // Same as Arc-TEST-TRACK: only run detection after user presses START (bg = clean scene, putter out of frame)
+  if(!tracking || !bg){
+    badge.style.opacity = 1;
+    badge.textContent = `READY\nfps: ${fps.toFixed(1)}\nPress START`;
+    currentTrackedRect=null;
+    return;
+  }
+
   const fr=grab();
   const z=getZone(fr.width, fr.height);
 
+  // Gate ON (ball won't trigger) for detection
   const rect = detectHeadRectangle(bg, fr, z, true, lastRect ? lastRect.center : null);
 
   let used = rect;
@@ -646,11 +651,16 @@ async function loop(){
     }
     drawRect(used.corners, "rgba(0,255,0,0.85)", 6);
     drawFaceLine(used.center, used.faceAngle, 120, "rgba(255,255,255,0.95)", 6);
+
+    if(DEBUG_DRAW_POINTS){
+      // (optionnel: lourd) — pas activé
+    }
   }
 
   // Only skip badge update when ARMED (during capture flow)
   if(state === "ARMED") return;
 
+  badge.style.opacity = 1;
   badge.textContent =
     `${status}  (fps: ${fps.toFixed(1)})\n`+
     `blob: ${used?used.pixels:0}\n`+
@@ -974,5 +984,4 @@ btnAnalyze.addEventListener("click", async ()=>{
 });
 </script>
 </body>
-</html></body>
 </html>
