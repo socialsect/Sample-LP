@@ -1,5 +1,4 @@
 <!doctype html>
-
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -148,9 +147,8 @@ video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
     <label><input id="handed" type="checkbox" aria-label="Toggle Left-handed"/></label>
   </div>
 
-<button id="btn">START</button>
-<button id="btnAnalyze" disabled>ANALYZE ARC</button>
-
+  <button id="btn">START</button>
+  <button id="btnAnalyze" disabled>ANALYZE ARC</button>
   <div id="badge">Init…</div>
   <div id="messageOverlay">
     <div id="messageOverlayCard" class="message-overlay-card"></div>
@@ -160,7 +158,7 @@ video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 </div>
 
 <script>
-/* ===================== CONFIG ===================== */
+/* ===================== CONFIG (unchanged from test track) ===================== */
 const FPS_TARGET = 30;
 const DIFF_THR = 38;
 const STEP = 3;
@@ -184,7 +182,7 @@ const MAX_RECT_ASPECT = 5.0;
 const ROI_PAD = 160;
 const HOLD_LAST_FRAMES = 10;
 
-// REMOVED: FACE_GATE_MARGIN_PX - no longer using gate for detection
+const FACE_GATE_MARGIN_PX = 12;
 
 const DEBUG_DRAW_POINTS = false;
 const DEBUG_ALWAYS = true;
@@ -216,7 +214,7 @@ const handLabel = document.getElementById("handLabel");
 function isLeftHanded(){ return handedToggle.checked; }
 handedToggle.addEventListener("change", ()=> handLabel.textContent = isLeftHanded() ? "LH" : "RH");
 
-/* ---------- helpers ---------- */
+/* ---------- helpers (unchanged from test track) ---------- */
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 function getZone(w,h){
   const zw=w*ZONE_W, zh=h*ZONE_H;
@@ -236,8 +234,11 @@ function faceLineX(w,h){
   const b=ballInfo(w,h);
   return isLeftHanded() ? (b.cx - b.r) : (b.cx + b.r);
 }
-// REMOVED: passesTriggerGate - no longer filtering by gate position
-
+function passesTriggerGate(x,w,h){
+  const fx=faceLineX(w,h);
+  if(!isLeftHanded()) return x >= (fx + FACE_GATE_MARGIN_PX);
+  return x <= (fx - FACE_GATE_MARGIN_PX);
+}
 function drawArrowOnLine(w,y,toLeft){
   const margin=26;
   const xTip=toLeft?margin:(w-margin);
@@ -301,7 +302,7 @@ function drawFaceLine(center, angle, len=110, color="rgba(0,255,0,0.95)", w=6){
   ctx.restore();
 }
 
-/* ---------- OFFSCREEN ---------- */
+/* ---------- OFFSCREEN (unchanged from test track) ---------- */
 const off=document.createElement("canvas");
 const offCtx=off.getContext("2d",{willReadFrequently:true});
 
@@ -312,7 +313,7 @@ function grab(){
   return offCtx.getImageData(0,0,off.width,off.height);
 }
 
-/* ---------- ROI helpers ---------- */
+/* ---------- ROI helpers (unchanged from test track) ---------- */
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function computeROI(z, lastCenter){
   if(!lastCenter) return {x0:z.x, y0:z.y, x1:z.x+z.w, y1:z.y+z.h};
@@ -324,7 +325,7 @@ function computeROI(z, lastCenter){
 }
 
 /* =========================================================
-   DETECT HEAD RECTANGLE - MODIFIED TO TRACK FULL ZONE
+   DETECT HEAD RECTANGLE (unchanged from test track)
    ========================================================= */
 function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   const w=bg.width, h=bg.height;
@@ -348,10 +349,8 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
     for(let gx=0; gx<gridW; gx++, idx++){
       const x=xMin + gx*STEP;
 
-      // Only skip ball mask - REMOVED gate check
       if(insideBallMask(x,y,b)) continue;
-      
-      // REMOVED: if(useGate && !passesTriggerGate(x,w,h)) continue;
+      if(useGate && !passesTriggerGate(x,w,h)) continue;
 
       const i=(Math.floor(y)*w+Math.floor(x))*4;
       const d=(Math.abs(fr.data[i]-bg.data[i])+
@@ -487,7 +486,7 @@ function diffPixelCount(a,b,z){
   return count;
 }
 
-/* ---------- camera ---------- */
+/* ---------- camera (unchanged from test track) ---------- */
 async function startCamera(){
   const tmp=await navigator.mediaDevices.getUserMedia({video:true});
   tmp.getTracks().forEach(t=>t.stop());
@@ -512,7 +511,7 @@ async function startCamera(){
 }
 startCamera();
 
-/* ---------- state & tracking ---------- */
+/* ---------- state & tracking (foundation unchanged) ---------- */
 let state = "IDLE";
 let bg=null;
 let tracking=false;
@@ -588,7 +587,7 @@ function updateFPS(){
   fps = fps*0.85 + inst*0.15;
 }
 
-/* ---------- render loop - MODIFIED: useGate set to FALSE ---------- */
+/* ---------- render loop (tracking unchanged: same detection, ROI draw, badge) ---------- */
 async function loop(){
   requestAnimationFrame(loop);
   if(!video.videoWidth) return;
@@ -607,6 +606,7 @@ async function loop(){
     return;
   }
 
+  // Same as Arc-TEST-TRACK: only run detection after user presses START (bg = clean scene, putter out of frame)
   if(!tracking || !bg){
     badge.style.opacity = 1;
     badge.textContent = `READY\nfps: ${fps.toFixed(1)}\nPress START`;
@@ -617,7 +617,7 @@ async function loop(){
   const fr=grab();
   const z=getZone(fr.width, fr.height);
 
-  // Gate OFF (false) - track entire zone
+  // Gate OFF – detection in whole rectangle (not just one side of face line)
   const rect = detectHeadRectangle(bg, fr, z, false, lastRect ? lastRect.center : null);
 
   let used = rect;
@@ -639,6 +639,7 @@ async function loop(){
 
   currentTrackedRect=used;
 
+  // Draw ROI / rect / face line (identical to Arc-TEST-TRACK)
   if(used){
     if(used.roi){
       ctx.save();
@@ -656,6 +657,7 @@ async function loop(){
     }
   }
 
+  // Only skip badge update when ARMED (during capture flow)
   if(state === "ARMED") return;
 
   badge.style.opacity = 1;
@@ -770,7 +772,7 @@ function exportTrainingData(){
   URL.revokeObjectURL(a.href);
 }
 
-/* ---------- capture one putt - MODIFIED: useGate set to FALSE ---------- */
+/* ---------- capture one putt ---------- */
 async function captureOnePutt(i){
   state="ARMED";
   btn.disabled=true;
@@ -790,7 +792,6 @@ async function captureOnePutt(i){
   while(true){
     await sleep(120);
     const now=grab();
-    // Gate OFF during capture too
     const rect = detectHeadRectangle(bg, now, z, false, lastR ? lastR.center : null);
     if(rect){ lastR=rect; lastRH=HOLD_LAST_FRAMES; currentTrackedRect=rect; }
     else{
@@ -820,7 +821,6 @@ async function captureOnePutt(i){
   while(performance.now()-t0<RECORD_MS){
     const fr=grab();
     frames.push(fr);
-    // Gate OFF during recording
     const rect = detectHeadRectangle(bg, fr, z, false, lastR ? lastR.center : null);
     if(rect){ lastR=rect; lastRH=HOLD_LAST_FRAMES; rectangles.push(rect); }
     else{
@@ -983,6 +983,5 @@ btnAnalyze.addEventListener("click", async ()=>{
   }
 });
 </script>
-
 </body>
 </html>
