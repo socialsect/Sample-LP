@@ -785,7 +785,7 @@ async function captureOnePutt(i){
   while(true){
     await sleep(120);
     const now=grab();
-    const rect = detectHeadRectangle(bg, now, z, false, lastR ? lastR.center : null);
+    const rect = detectHeadRectangle(captureBg, now, z, false, lastR ? lastR.center : null);
     if(rect){ lastR=rect; lastRH=HOLD_LAST_FRAMES; currentTrackedRect=rect; }
     else{
       if(lastRH>0 && lastR){ lastRH--; currentTrackedRect=lastR; }
