@@ -158,7 +158,7 @@ video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 </div>
 
 <script>
-/* ===================== CONFIG (unchanged from test track) ===================== */
+/* ===================== CONFIG ===================== */
 const FPS_TARGET = 30;
 const DIFF_THR = 38;
 const STEP = 3;
@@ -190,7 +190,7 @@ const DEBUG_ALWAYS = true;
 
 /* ===== CAPTURE CONFIG (arc analyzer) ===== */
 const RECORD_MS = 2000;
-const STILL_MS = 600;
+const STILL_MS = 800;
 const STILL_PIXEL_COUNT = 55;
 const PUTTS_TARGET = 3;
 const TOUCH_TOL = 8;
@@ -214,7 +214,7 @@ const handLabel = document.getElementById("handLabel");
 function isLeftHanded(){ return handedToggle.checked; }
 handedToggle.addEventListener("change", ()=> handLabel.textContent = isLeftHanded() ? "LH" : "RH");
 
-/* ---------- helpers (unchanged from test track) ---------- */
+/* ---------- helpers ---------- */
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 function getZone(w,h){
   const zw=w*ZONE_W, zh=h*ZONE_H;
@@ -302,7 +302,7 @@ function drawFaceLine(center, angle, len=110, color="rgba(0,255,0,0.95)", w=6){
   ctx.restore();
 }
 
-/* ---------- OFFSCREEN (unchanged from test track) ---------- */
+/* ---------- OFFSCREEN ---------- */
 const off=document.createElement("canvas");
 const offCtx=off.getContext("2d",{willReadFrequently:true});
 
@@ -313,7 +313,7 @@ function grab(){
   return offCtx.getImageData(0,0,off.width,off.height);
 }
 
-/* ---------- ROI helpers (unchanged from test track) ---------- */
+/* ---------- ROI helpers ---------- */
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function computeROI(z, lastCenter){
   if(!lastCenter) return {x0:z.x, y0:z.y, x1:z.x+z.w, y1:z.y+z.h};
@@ -325,7 +325,7 @@ function computeROI(z, lastCenter){
 }
 
 /* =========================================================
-   DETECT HEAD RECTANGLE (unchanged from test track)
+   DETECT HEAD RECTANGLE - CIRCLE AREA NOW INCLUDED
    ========================================================= */
 function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   const w=bg.width, h=bg.height;
@@ -349,7 +349,7 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
     for(let gx=0; gx<gridW; gx++, idx++){
       const x=xMin + gx*STEP;
 
-      if(insideBallMask(x,y,b)) continue;
+      // REMOVED: Circle area now included - no more insideBallMask check
       if(useGate && !passesTriggerGate(x,w,h)) continue;
 
       const i=(Math.floor(y)*w+Math.floor(x))*4;
@@ -461,22 +461,19 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   return {center:{x:rcx,y:rcy}, corners, faceAngle, pixels:n, roi};
 }
 
-/* ---------- motion detection (for capture) ---------- */
+/* ---------- motion detection (for capture) - CIRCLE AREA NOW INCLUDED ---------- */
 function diffPixelCount(a,b,z){
   const w=a.width;
   let count=0;
   const step=4;
-  const ball = ballInfo(a.width,a.height);
-  const r2 = ball.maskR*ball.maskR;
+  // REMOVED: ball mask exclusion - circle area now included
   const WHITE_THRESHOLD = 200;
   for(let y=z.y;y<z.y+z.h;y+=step){
     for(let x=z.x;x<z.x+z.w;x+=step){
-      const dx = x - ball.cx;
-      const dy = y - ball.cy;
-      if(dx*dx + dy*dy <= r2) continue;
       const i=(Math.floor(y)*w+Math.floor(x))*4;
       const brightness = (b.data[i] + b.data[i+1] + b.data[i+2]) / 3;
       if(brightness > WHITE_THRESHOLD) continue;
+      
       const d=(Math.abs(a.data[i]-b.data[i])+
                Math.abs(a.data[i+1]-b.data[i+1])+
                Math.abs(a.data[i+2]-b.data[i+2]))/3;
@@ -486,7 +483,7 @@ function diffPixelCount(a,b,z){
   return count;
 }
 
-/* ---------- camera (unchanged from test track) ---------- */
+/* ---------- camera ---------- */
 async function startCamera(){
   const tmp=await navigator.mediaDevices.getUserMedia({video:true});
   tmp.getTracks().forEach(t=>t.stop());
@@ -511,7 +508,7 @@ async function startCamera(){
 }
 startCamera();
 
-/* ---------- state & tracking (foundation unchanged) ---------- */
+/* ---------- state & tracking ---------- */
 let state = "IDLE";
 let bg=null;
 let tracking=false;
@@ -587,7 +584,7 @@ function updateFPS(){
   fps = fps*0.85 + inst*0.15;
 }
 
-/* ---------- render loop (tracking unchanged: same detection, ROI draw, badge) ---------- */
+/* ---------- render loop ---------- */
 async function loop(){
   requestAnimationFrame(loop);
   if(!video.videoWidth) return;
@@ -606,7 +603,6 @@ async function loop(){
     return;
   }
 
-  // Same as Arc-TEST-TRACK: only run detection after user presses START (bg = clean scene, putter out of frame)
   if(!tracking || !bg){
     badge.style.opacity = 1;
     badge.textContent = `READY\nfps: ${fps.toFixed(1)}\nPress START`;
@@ -617,7 +613,6 @@ async function loop(){
   const fr=grab();
   const z=getZone(fr.width, fr.height);
 
-  // Gate OFF – detection in whole rectangle (not just one side of face line)
   const rect = detectHeadRectangle(bg, fr, z, false, lastRect ? lastRect.center : null);
 
   let used = rect;
@@ -639,7 +634,6 @@ async function loop(){
 
   currentTrackedRect=used;
 
-  // Draw ROI / rect / face line (identical to Arc-TEST-TRACK)
   if(used){
     if(used.roi){
       ctx.save();
@@ -657,7 +651,6 @@ async function loop(){
     }
   }
 
-  // Only skip badge update when ARMED (during capture flow)
   if(state === "ARMED") return;
 
   badge.style.opacity = 1;
