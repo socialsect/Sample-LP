@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>Putting – Arc Analyzer (Enhanced White Filter)</title>
+<title>Putting – Arc Analyzer (Test-Track Foundation)</title>
 <link rel="preload" href="Fonts/good%20times%20rg.ttf" as="font" type="font/ttf" crossorigin="anonymous"/>
 <link rel="preload" href="Fonts/Avenir%20(1).ttc" as="font" type="font/ttc" crossorigin="anonymous"/>
 <style>
@@ -164,8 +164,8 @@ const DIFF_THR = 38;
 const STEP = 3;
 const DIR_Y = 0.5;
 
-const ZONE_W = 1.0;
-const ZONE_H = 0.58;
+const ZONE_W = 1.0;   /* full width, stays on screen */
+const ZONE_H = 0.58;  /* taller zone: detection in whole updated area */
 
 const HEAD_BAND_HALF_PX = 120;
 
@@ -174,12 +174,6 @@ const BALL_RADIUS_PCT = 0.055;
 const BALL_MASK_MULT = 2.4;
 
 const LUMA_IGNORE_WHITE = 215;
-
-/* ===== ENHANCED WHITE FILTERING PARAMS ===== */
-const WHITE_RGB_THRESHOLD = 180;     // All RGB channels must be above this
-const COLOR_UNIFORMITY_MAX = 30;      // Max variance between R,G,B for "white"
-const BRIGHT_UNIFORM_LUMA = 150;      // Luma threshold for bright+uniform check
-/* ========================================== */
 
 const MIN_BLOB_PX = 45;
 const MIN_RECT_AREA = 650;
@@ -331,9 +325,7 @@ function computeROI(z, lastCenter){
 }
 
 /* =========================================================
-   DETECT HEAD RECTANGLE - ENHANCED WHITE FILTERING
-   Ball area is INCLUDED in detection, but white objects
-   are intelligently filtered out
+   DETECT HEAD RECTANGLE - CIRCLE AREA NOW INCLUDED
    ========================================================= */
 function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   const w=bg.width, h=bg.height;
@@ -357,7 +349,7 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
     for(let gx=0; gx<gridW; gx++, idx++){
       const x=xMin + gx*STEP;
 
-      // NO BALL MASK - area is included in detection
+      // REMOVED: Circle area now included - no more insideBallMask check
       if(useGate && !passesTriggerGate(x,w,h)) continue;
 
       const i=(Math.floor(y)*w+Math.floor(x))*4;
@@ -368,29 +360,7 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
 
       const r=fr.data[i], g=fr.data[i+1], bl=fr.data[i+2];
       const luma = 0.2126*r + 0.7152*g + 0.0722*bl;
-      
-      // ENHANCED WHITE FILTERING - Multiple checks to filter white objects
-      
-      // 1. Basic luma threshold (existing)
       if(luma > LUMA_IGNORE_WHITE) continue;
-      
-      // 2. Check if all RGB channels are high (whitish color)
-      const isWhitish = (r > WHITE_RGB_THRESHOLD && 
-                         g > WHITE_RGB_THRESHOLD && 
-                         bl > WHITE_RGB_THRESHOLD);
-      if(isWhitish) continue;
-      
-      // 3. Check color uniformity (white has similar R,G,B values)
-      const colorVariance = Math.max(
-        Math.abs(r - g),
-        Math.abs(g - bl),
-        Math.abs(r - bl)
-      );
-      
-      // If bright AND uniform color → likely white object (like ball)
-      if(luma > BRIGHT_UNIFORM_LUMA && colorVariance < COLOR_UNIFORMITY_MAX) {
-        continue;
-      }
 
       grid[idx]=1;
     }
@@ -491,31 +461,18 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   return {center:{x:rcx,y:rcy}, corners, faceAngle, pixels:n, roi};
 }
 
-/* ---------- motion detection (for capture) - ENHANCED WHITE FILTERING ---------- */
+/* ---------- motion detection (for capture) - CIRCLE AREA NOW INCLUDED ---------- */
 function diffPixelCount(a,b,z){
   const w=a.width;
   let count=0;
   const step=4;
-  
+  // REMOVED: ball mask exclusion - circle area now included
+  const WHITE_THRESHOLD = 200;
   for(let y=z.y;y<z.y+z.h;y+=step){
     for(let x=z.x;x<z.x+z.w;x+=step){
       const i=(Math.floor(y)*w+Math.floor(x))*4;
-      
-      // Enhanced white filtering
-      const r = b.data[i];
-      const g = b.data[i+1];
-      const bl = b.data[i+2];
-      const brightness = (r + g + bl) / 3;
-      
-      // Skip if very bright
-      if(brightness > 200) continue;
-      
-      // Skip if whitish (all channels high)
-      if(r > WHITE_RGB_THRESHOLD && g > WHITE_RGB_THRESHOLD && bl > WHITE_RGB_THRESHOLD) continue;
-      
-      // Skip if bright and uniform color
-      const colorVariance = Math.max(Math.abs(r-g), Math.abs(g-bl), Math.abs(r-bl));
-      if(brightness > BRIGHT_UNIFORM_LUMA && colorVariance < COLOR_UNIFORMITY_MAX) continue;
+      const brightness = (b.data[i] + b.data[i+1] + b.data[i+2]) / 3;
+      if(brightness > WHITE_THRESHOLD) continue;
       
       const d=(Math.abs(a.data[i]-b.data[i])+
                Math.abs(a.data[i+1]-b.data[i+1])+
