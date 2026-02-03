@@ -159,20 +159,29 @@ video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 </div>
 
 <script>
-/* ===================== CONFIG (unchanged from test track) ===================== */
+/* ===================== CONFIG ===================== */
 const FPS_TARGET = 30;
 const DIFF_THR = 38;
 const STEP = 3;
 const DIR_Y = 0.5;
 
-const ZONE_W = 1.0;   /* full width, stays on screen */
-const ZONE_H = 0.58;  /* taller zone: detection in whole updated area */
+const ZONE_W = 1.0;
+const ZONE_H = 0.58;
 
 const HEAD_BAND_HALF_PX = 120;
 
 const BALL_X = 0.5;
 const BALL_RADIUS_PCT = 0.055;
-const BALL_MASK_MULT = 2.4;
+/* 
+ * BALL_MASK_MULT removed — no longer used as a hard skip radius.
+ * We now use a soft-falloff weighting instead.
+ * BALL_SOFT_INNER: inside this radius, pixel weight = BALL_WEIGHT_CENTER (low but non-zero)
+ * BALL_SOFT_OUTER: outside this radius, pixel weight = 1.0 (full)
+ * Between inner and outer: linear interpolation from center-weight to 1.0
+ */
+const BALL_SOFT_INNER = 0.8;   /* fraction of visual ball radius — tight core */
+const BALL_SOFT_OUTER = 2.0;   /* fraction of visual ball radius — weight reaches 1.0 here */
+const BALL_WEIGHT_CENTER = 0.25; /* minimum weight at dead centre (not zero — still counts) */
 
 const LUMA_IGNORE_WHITE = 215;
 
@@ -199,10 +208,9 @@ const X_TOL = 6;
 const AVG_SAMPLES = 120;
 const REPLAY_FPS = 22;
 
-/* START ZONE - green box at ball/line intersection */
-const START_ZONE_W = 210;  /* width of green start zone box (1.5x of 140) */
-const START_ZONE_H = 280;  /* height of green start zone box (taller, vertical orientation) */
-const COUNTDOWN_DURATION = 700; /* 0.7 seconds countdown */
+const START_ZONE_W = 210;
+const START_ZONE_H = 280;
+const COUNTDOWN_DURATION = 700;
 
 const ARC_TRAINING_KEY = "arcAnalyzerFromTestTrack";
 
@@ -220,7 +228,7 @@ const handLabel = document.getElementById("handLabel");
 function isLeftHanded(){ return handedToggle.checked; }
 handedToggle.addEventListener("change", ()=> handLabel.textContent = isLeftHanded() ? "LH" : "RH");
 
-/* ---------- helpers (unchanged from test track) ---------- */
+/* ---------- helpers ---------- */
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 function getZone(w,h){
   const zw=w*ZONE_W, zh=h*ZONE_H;
@@ -229,13 +237,29 @@ function getZone(w,h){
 function ballInfo(w,h){
   const cx=w*BALL_X, cy=h*DIR_Y;
   const r=Math.min(w,h)*BALL_RADIUS_PCT;
-  const maskR=r*BALL_MASK_MULT;
-  return {cx,cy,r,maskR};
+  /* pre-compute the soft-zone radii in pixels */
+  const innerR = r * BALL_SOFT_INNER;
+  const outerR = r * BALL_SOFT_OUTER;
+  return {cx, cy, r, innerR, outerR};
 }
-function insideBallMask(x,y,b){
-  const dx=x-b.cx, dy=y-b.cy;
-  return (dx*dx+dy*dy) <= (b.maskR*b.maskR);
+
+/*
+ * ballWeight(x, y, b)
+ * Returns a weight in [BALL_WEIGHT_CENTER … 1.0] based on distance from ball centre.
+ *   • dist <= innerR  →  BALL_WEIGHT_CENTER  (centre: low but counted)
+ *   • dist >= outerR  →  1.0                 (far enough: full weight)
+ *   • in between      →  smooth linear lerp
+ */
+function ballWeight(x, y, b){
+  const dx = x - b.cx, dy = y - b.cy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if(dist <= b.innerR) return BALL_WEIGHT_CENTER;
+  if(dist >= b.outerR) return 1.0;
+  /* linear interpolation */
+  const t = (dist - b.innerR) / (b.outerR - b.innerR);
+  return BALL_WEIGHT_CENTER + t * (1.0 - BALL_WEIGHT_CENTER);
 }
+
 function faceLineX(w,h){
   const b=ballInfo(w,h);
   return isLeftHanded() ? (b.cx - b.r) : (b.cx + b.r);
@@ -249,18 +273,11 @@ function passesTriggerGate(x,w,h){
 /* ---------- START ZONE helpers ---------- */
 function getStartZone(w, h){
   const b = ballInfo(w, h);
-  const fx = faceLineX(w, h); // Get the vertical line position
-  
+  const fx = faceLineX(w, h);
   let x;
-  if(isLeftHanded()){
-    // For LH, put zone to the LEFT of the vertical line, touching it
-    x = fx - START_ZONE_W;
-  } else {
-    // For RH, put zone to the RIGHT of the vertical line, touching it
-    x = fx;
-  }
-  
-  const y = b.cy - START_ZONE_H / 2; // Center vertically on horizontal line
+  if(isLeftHanded()){ x = fx - START_ZONE_W; }
+  else{ x = fx; }
+  const y = b.cy - START_ZONE_H / 2;
   return { x, y, w: START_ZONE_W, h: START_ZONE_H };
 }
 function isInsideStartZone(center, w, h){
@@ -275,8 +292,6 @@ function drawStartZone(w, h){
   ctx.strokeStyle = "rgba(0, 255, 0, 0.85)";
   ctx.lineWidth = 5;
   ctx.strokeRect(zone.x, zone.y, zone.w, zone.h);
-  
-  // Draw "START ZONE" text
   ctx.fillStyle = "rgba(0, 255, 0, 0.95)";
   ctx.font = "bold 18px 'Good Times', system-ui, sans-serif";
   ctx.textAlign = "center";
@@ -324,8 +339,6 @@ function drawGuides(w,h){
   ctx.strokeStyle="rgba(255,255,255,.8)";
   ctx.lineWidth=3;
   ctx.strokeRect(z.x,z.y,z.w,z.h);
-  
-  // Draw start zone
   drawStartZone(w, h);
 }
 function drawRect(corners, color, w=5){
@@ -351,7 +364,7 @@ function drawFaceLine(center, angle, len=110, color="rgba(0,255,0,0.95)", w=6){
   ctx.restore();
 }
 
-/* ---------- OFFSCREEN (unchanged from test track) ---------- */
+/* ---------- OFFSCREEN ---------- */
 const off=document.createElement("canvas");
 const offCtx=off.getContext("2d",{willReadFrequently:true});
 
@@ -362,7 +375,7 @@ function grab(){
   return offCtx.getImageData(0,0,off.width,off.height);
 }
 
-/* ---------- ROI helpers (unchanged from test track) ---------- */
+/* ---------- ROI helpers ---------- */
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function computeROI(z, lastCenter){
   if(!lastCenter) return {x0:z.x, y0:z.y, x1:z.x+z.w, y1:z.y+z.h};
@@ -374,7 +387,7 @@ function computeROI(z, lastCenter){
 }
 
 /* =========================================================
-   DETECT HEAD RECTANGLE (unchanged from test track)
+   DETECT HEAD RECTANGLE — soft ball-centre weighting
    ========================================================= */
 function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   const w=bg.width, h=bg.height;
@@ -390,7 +403,8 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
 
   const gridW = Math.max(1, Math.floor((xMax-xMin)/STEP));
   const gridH = Math.max(1, Math.floor((yMax-yMin)/STEP));
-  const grid = new Uint8Array(gridW*gridH);
+  /* grid now stores a WEIGHT (float 0…1) instead of a binary flag */
+  const grid = new Float32Array(gridW*gridH);
 
   let idx=0;
   for(let gy=0; gy<gridH; gy++){
@@ -398,7 +412,7 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
     for(let gx=0; gx<gridW; gx++, idx++){
       const x=xMin + gx*STEP;
 
-      if(insideBallMask(x,y,b)) continue;
+      /* gate filter (unchanged logic) */
       if(useGate && !passesTriggerGate(x,w,h)) continue;
 
       const i=(Math.floor(y)*w+Math.floor(x))*4;
@@ -411,36 +425,44 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
       const luma = 0.2126*r + 0.7152*g + 0.0722*bl;
       if(luma > LUMA_IGNORE_WHITE) continue;
 
-      grid[idx]=1;
+      /* KEY CHANGE: apply soft weight near ball centre instead of hard skip */
+      grid[idx] = ballWeight(x, y, b);
     }
   }
 
-  const visited=new Uint8Array(grid.length);
+  /* ---------- connected-component search ---------- */
+  /* We still need a binary "is this pixel part of a blob" decision for BFS,
+   * so treat any weight > 0 as present.  The weight is used later when
+   * scoring blobs so the centre pixels are counted but carry less mass. */
+  const visited=new Uint8Array(gridW*gridH);
   let best=null;
 
   for(let i=0;i<grid.length;i++){
-    if(!grid[i] || visited[i]) continue;
+    if(grid[i] === 0 || visited[i]) continue;
 
     const q=[i]; visited[i]=1;
     const comp=[];
+    let compWeight = 0; /* accumulated weight for this component */
 
     for(let qi=0; qi<q.length; qi++){
       const cur=q[qi];
       comp.push(cur);
+      compWeight += grid[cur];
 
       const gx=cur%gridW;
       const gy=(cur/gridW)|0;
 
       const n1=cur-1, n2=cur+1, n3=cur-gridW, n4=cur+gridW;
-      if(gx>0 && grid[n1] && !visited[n1]){visited[n1]=1;q.push(n1);}
-      if(gx<gridW-1 && grid[n2] && !visited[n2]){visited[n2]=1;q.push(n2);}
-      if(gy>0 && grid[n3] && !visited[n3]){visited[n3]=1;q.push(n3);}
-      if(gy<gridH-1 && grid[n4] && !visited[n4]){visited[n4]=1;q.push(n4);}
+      if(gx>0       && grid[n1]>0 && !visited[n1]){visited[n1]=1;q.push(n1);}
+      if(gx<gridW-1 && grid[n2]>0 && !visited[n2]){visited[n2]=1;q.push(n2);}
+      if(gy>0       && grid[n3]>0 && !visited[n3]){visited[n3]=1;q.push(n3);}
+      if(gy<gridH-1 && grid[n4]>0 && !visited[n4]){visited[n4]=1;q.push(n4);}
     }
 
-    if(comp.length<MIN_BLOB_PX) continue;
+    /* use weighted pixel count for the minimum-blob test */
+    if(compWeight < MIN_BLOB_PX) continue;
 
-    let score=comp.length;
+    let score = compWeight;   /* score is now weight-based, not raw count */
     if(lastCenter){
       let sx=0,sy=0;
       for(const ci of comp){ sx+=(ci%gridW); sy+=((ci/gridW)|0); }
@@ -455,6 +477,7 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
 
   if(!best) return null;
 
+  /* ---------- PCA / bounding rect (unchanged geometry) ---------- */
   const points=[];
   let sx=0,sy=0;
   for(const ci of best.comp){
@@ -511,31 +534,38 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
 }
 
 /* ---------- motion detection (for capture) ---------- */
-function diffPixelCount(a,b,z){
+/*
+ * diffPixelCount — stillness check.
+ * We keep a small hard-skip only for the exact VISUAL ball radius (b.r),
+ * not the old 2.4× mask.  The drawn circle is just a guide marker;
+ * we don't want the ball graphic itself to trigger "motion".
+ * Everything outside that tiny circle is counted normally.
+ */
+function diffPixelCount(a,b_img,z){
   const w=a.width;
   let count=0;
   const step=4;
   const ball = ballInfo(a.width,a.height);
-  const r2 = ball.maskR*ball.maskR;
+  const r2 = ball.r * ball.r;          /* only skip the drawn-circle radius */
   const WHITE_THRESHOLD = 200;
   for(let y=z.y;y<z.y+z.h;y+=step){
     for(let x=z.x;x<z.x+z.w;x+=step){
       const dx = x - ball.cx;
       const dy = y - ball.cy;
-      if(dx*dx + dy*dy <= r2) continue;
+      if(dx*dx + dy*dy <= r2) continue; /* tiny visual-circle skip only */
       const i=(Math.floor(y)*w+Math.floor(x))*4;
-      const brightness = (b.data[i] + b.data[i+1] + b.data[i+2]) / 3;
+      const brightness = (b_img.data[i] + b_img.data[i+1] + b_img.data[i+2]) / 3;
       if(brightness > WHITE_THRESHOLD) continue;
-      const d=(Math.abs(a.data[i]-b.data[i])+
-               Math.abs(a.data[i+1]-b.data[i+1])+
-               Math.abs(a.data[i+2]-b.data[i+2]))/3;
+      const d=(Math.abs(a.data[i]-b_img.data[i])+
+               Math.abs(a.data[i+1]-b_img.data[i+1])+
+               Math.abs(a.data[i+2]-b_img.data[i+2]))/3;
       if(d>DIFF_THR) count++;
     }
   }
   return count;
 }
 
-/* ---------- camera (unchanged from test track) ---------- */
+/* ---------- camera ---------- */
 async function startCamera(){
   const tmp=await navigator.mediaDevices.getUserMedia({video:true});
   tmp.getTracks().forEach(t=>t.stop());
@@ -560,7 +590,7 @@ async function startCamera(){
 }
 startCamera();
 
-/* ---------- state & tracking (foundation unchanged) ---------- */
+/* ---------- state & tracking ---------- */
 let state = "IDLE";
 let bg=null;
 let tracking=false;
@@ -636,7 +666,7 @@ function updateFPS(){
   fps = fps*0.85 + inst*0.15;
 }
 
-/* ---------- render loop (tracking unchanged: same detection, ROI draw, badge) ---------- */
+/* ---------- render loop ---------- */
 async function loop(){
   requestAnimationFrame(loop);
   if(!video.videoWidth) return;
@@ -655,7 +685,6 @@ async function loop(){
     return;
   }
 
-  // Same as Arc-TEST-TRACK: only run detection after user presses START (bg = clean scene, putter out of frame)
   if(!tracking || !bg){
     badge.style.opacity = 1;
     badge.textContent = `READY\nfps: ${fps.toFixed(1)}\nPress START`;
@@ -666,7 +695,6 @@ async function loop(){
   const fr=grab();
   const z=getZone(fr.width, fr.height);
 
-  // Gate OFF – detection in whole rectangle (not just one side of face line)
   const rect = detectHeadRectangle(bg, fr, z, false, lastRect ? lastRect.center : null);
 
   let used = rect;
@@ -688,7 +716,6 @@ async function loop(){
 
   currentTrackedRect=used;
 
-  // Draw ROI / rect / face line (identical to Arc-TEST-TRACK)
   if(used){
     if(used.roi){
       ctx.save();
@@ -700,13 +727,8 @@ async function loop(){
     }
     drawRect(used.corners, "rgba(0,255,0,0.85)", 6);
     drawFaceLine(used.center, used.faceAngle, 120, "rgba(255,255,255,0.95)", 6);
-
-    if(DEBUG_DRAW_POINTS){
-      // (optionnel: lourd) — pas activé
-    }
   }
 
-  // Only skip badge update when ARMED (during capture flow)
   if(state === "ARMED") return;
 
   badge.style.opacity = 1;
@@ -846,12 +868,9 @@ async function captureOnePutt(i){
       else currentTrackedRect=null;
     }
     
-    // Check if putter is inside START ZONE
     const inStartZone = rect && isInsideStartZone(rect.center, captureBg.width, captureBg.height);
-    
     const d=diffPixelCount(prev,now,z);
     
-    // Only count as still if putter is INSIDE the start zone AND motion is low
     if(inStartZone && d<STILL_PIXEL_COUNT){
       if(!stillStart) stillStart=performance.now();
       const elapsed=performance.now()-stillStart;
@@ -870,8 +889,7 @@ async function captureOnePutt(i){
 
   beep();
   
-  // Shortened countdown: COUNTDOWN_DURATION = 700ms total
-  const countdownSteps = Math.ceil(COUNTDOWN_DURATION / 100); // How many 100ms steps
+  const countdownSteps = Math.ceil(COUNTDOWN_DURATION / 100);
   const stepDuration = COUNTDOWN_DURATION / countdownSteps;
   
   for(let step = countdownSteps; step > 0; step--){
@@ -920,23 +938,15 @@ async function runThree(){
     results.push(await captureOnePutt(i));
     
     if(i<PUTTS_TARGET-1){
-      // BACKGROUND REFRESH: Immediately refresh after putt completes
       show(`Putt ${i+1} complete!\nRemove putter from frame\nfor 2 seconds...`, "prominent");
-      
-      // Wait for user to clear the frame
       await sleep(2000);
-      
-      // Capture new clean background (putter should be out of frame now)
       bg = grab();
       lastRect = null;
       lastRectHold = 0;
-      
       beep();
       show(`Background refreshed!\nNext putt: ${i+2} of ${PUTTS_TARGET}\nReady when you are`, "prominent");
       await sleep(1500);
       hide();
-      
-      // Now the captureOnePutt flow will handle waiting for putter in START ZONE
     }
   }
   return results;
@@ -981,13 +991,9 @@ async function renderResultReplay(all){
   const drawScene = (frameCanvas, rectIdx, showIndividualArcs=false, avgArcProgress=null)=>{
     ctx.clearRect(0,0,overlay.width,overlay.height);
     ctx.drawImage(frameCanvas, 0, 0);
-    
-    // Draw individual white arcs if requested
     if(showIndividualArcs){
       for(const arc of whiteArcs) drawPolyline(arc, "rgba(255,255,255,0.9)", 6);
     }
-    
-    // Draw average arc progressively if provided
     if(avgArc && avgArcProgress !== null){
       const pointsToDraw = Math.min(avgArcProgress, avgArc.length);
       if(pointsToDraw >= 2){
@@ -995,7 +1001,6 @@ async function renderResultReplay(all){
         drawPolyline(partialArc, "rgba(203,0,0,1)", 7);
       }
     }
-    
     if(replayRects[rectIdx]){
       drawRect(replayRects[rectIdx].corners, "rgba(203,0,0,1)", 6);
       drawFaceLine(replayRects[rectIdx].center, replayRects[rectIdx].faceAngle, 120, "rgba(255,255,255,0.95)", 6);
@@ -1005,21 +1010,18 @@ async function renderResultReplay(all){
 
   const total = replayFrames.length;
   
-  // First: replay with individual arcs visible
   for(let i=0;i<total;i++){
     drawScene(replayFrames[i], i, true, null);
     await sleep(1000/REPLAY_FPS);
   }
   
-  // Second: slowly draw the average arc on final frame
   if(avgArc && avgArc.length >= 2){
-    const avgDrawFrames = 60; // Number of frames to draw average arc over
+    const avgDrawFrames = 60;
     const pointsPerFrame = avgArc.length / avgDrawFrames;
-    
     for(let frame=0; frame<=avgDrawFrames; frame++){
       const progress = Math.ceil(frame * pointsPerFrame);
       drawScene(replayFrames[total-1], total-1, true, progress);
-      await sleep(1000/30); // 30fps for smooth drawing
+      await sleep(1000/30);
     }
   } else {
     drawScene(replayFrames[total-1], total-1, true, avgArc ? avgArc.length : 0);
