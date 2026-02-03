@@ -998,6 +998,10 @@ async function renderResultReplay(all){
   const drawScene = (frameCanvas, rectIdx, showIndividualArcs=false, avgArcProgress=null)=>{
     ctx.clearRect(0,0,overlay.width,overlay.height);
     ctx.drawImage(frameCanvas, 0, 0);
+    
+    // Draw guides first (ball, lines, arrows) so they appear behind the arcs
+    drawGuides(last.captureBg.width, last.captureBg.height);
+    
     if(showIndividualArcs){
       for(const arc of whiteArcs) drawPolyline(arc, "rgba(255,255,255,0.9)", 6);
     }
@@ -1012,7 +1016,6 @@ async function renderResultReplay(all){
       drawRect(replayRects[rectIdx].corners, "rgba(203,0,0,1)", 6);
       drawFaceLine(replayRects[rectIdx].center, replayRects[rectIdx].faceAngle, 120, "rgba(255,255,255,0.95)", 6);
     }
-    drawGuides(last.captureBg.width, last.captureBg.height);
   };
 
   const total = replayFrames.length;
@@ -1047,8 +1050,24 @@ async function renderResultReplay(all){
     const toSx=x=>w/2+(x-cx)*scale;
     const toSy=y=>h/2+(y-cy)*scale;
     const lineY=h/2;
+    
+    // Calculate ball position in the scaled SVG
+    const b=ballInfo(overlay.width, overlay.height);
+    const ballSvgX = toSx(b.cx);
+    const ballSvgY = toSy(b.cy);
+    const ballSvgR = b.r * scale;
+    
+    // Calculate face line position
+    const fx = faceLineX(overlay.width, overlay.height);
+    const faceSvgX = toSx(fx);
+    
     const pathD=avgArc.map((p,i)=>(i?"L":"M")+toSx(p.x).toFixed(1)+","+toSy(p.y).toFixed(1)).join(" ");
-    arcSvg=`<svg class="arc-results-viz" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet"><line x1="0" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="rgba(239,68,68,.6)" stroke-width="2"/><path d="${pathD}" fill="none" stroke="rgba(203,0,0,1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    arcSvg=`<svg class="arc-results-viz" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+      <line x1="0" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="rgba(239,68,68,.6)" stroke-width="2"/>
+      <line x1="${faceSvgX}" y1="0" x2="${faceSvgX}" y2="${h}" stroke="rgba(239,68,68,.6)" stroke-width="2"/>
+      <circle cx="${ballSvgX}" cy="${ballSvgY}" r="${ballSvgR}" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="${pathD}" fill="none" stroke="rgba(203,0,0,1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
   }
   const trainingCount = getTrainingData().length;
 
