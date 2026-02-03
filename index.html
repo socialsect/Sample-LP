@@ -1049,7 +1049,6 @@ async function renderResultReplay(all){
     const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
     const toSx=x=>w/2+(x-cx)*scale;
     const toSy=y=>h/2+(y-cy)*scale;
-    const lineY=h/2;
     
     // Calculate ball position in the scaled SVG
     const b=ballInfo(overlay.width, overlay.height);
@@ -1061,11 +1060,22 @@ async function renderResultReplay(all){
     const fx = faceLineX(overlay.width, overlay.height);
     const faceSvgX = toSx(fx);
     
+    // Calculate arrow position (on the horizontal line, pointing in swing direction)
+    const LH = isLeftHanded();
+    const arrowMargin = 6;
+    const arrowLength = 12;
+    const arrowHead = 4;
+    const arrowY = ballSvgY;
+    const arrowXTip = LH ? arrowMargin : (w - arrowMargin);
+    const arrowXBase = LH ? (arrowMargin + arrowLength) : (w - arrowMargin - arrowLength);
+    
     const pathD=avgArc.map((p,i)=>(i?"L":"M")+toSx(p.x).toFixed(1)+","+toSy(p.y).toFixed(1)).join(" ");
     arcSvg=`<svg class="arc-results-viz" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
-      <line x1="0" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="rgba(239,68,68,.6)" stroke-width="2"/>
-      <line x1="${faceSvgX}" y1="0" x2="${faceSvgX}" y2="${h}" stroke="rgba(239,68,68,.6)" stroke-width="2"/>
-      <circle cx="${ballSvgX}" cy="${ballSvgY}" r="${ballSvgR}" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <line x1="0" y1="${ballSvgY}" x2="${w}" y2="${ballSvgY}" stroke="rgba(239,68,68,.9)" stroke-width="1.5"/>
+      <line x1="${faceSvgX}" y1="0" x2="${faceSvgX}" y2="${h}" stroke="rgba(239,68,68,.9)" stroke-width="1.5"/>
+      <line x1="${arrowXBase}" y1="${arrowY}" x2="${arrowXTip}" y2="${arrowY}" stroke="rgba(239,68,68,.9)" stroke-width="1.5" stroke-linecap="round"/>
+      <polygon points="${LH ? `${arrowXTip},${arrowY} ${arrowXTip+arrowHead},${arrowY-arrowHead} ${arrowXTip+arrowHead},${arrowY+arrowHead}` : `${arrowXTip},${arrowY} ${arrowXTip-arrowHead},${arrowY-arrowHead} ${arrowXTip-arrowHead},${arrowY+arrowHead}`}" fill="rgba(239,68,68,.9)"/>
+      <circle cx="${ballSvgX}" cy="${ballSvgY}" r="${ballSvgR}" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
       <path d="${pathD}" fill="none" stroke="rgba(203,0,0,1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   }
