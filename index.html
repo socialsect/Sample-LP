@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -919,37 +920,23 @@ async function runThree(){
     results.push(await captureOnePutt(i));
     
     if(i<PUTTS_TARGET-1){
-      // BACKGROUND REFRESH: Critical fix for detection between putts
-      show(`Putt ${i+1} complete!\nRemove putter from frame`, "prominent");
+      // BACKGROUND REFRESH: Immediately refresh after putt completes
+      show(`Putt ${i+1} complete!\nRemove putter from frame\nfor 2 seconds...`, "prominent");
       
-      // Wait for putter to be removed from frame
-      let putterGone = false;
-      while(!putterGone){
-        await sleep(200);
-        const checkFrame = grab();
-        const z = getZone(checkFrame.width, checkFrame.height);
-        const rect = detectHeadRectangle(bg, checkFrame, z, false, null);
-        
-        if(!rect){
-          // Putter appears to be gone, wait a bit more to be sure
-          await sleep(300);
-          const doubleCheck = grab();
-          const rect2 = detectHeadRectangle(bg, doubleCheck, z, false, null);
-          if(!rect2){
-            putterGone = true;
-          }
-        }
-      }
+      // Wait for user to clear the frame
+      await sleep(2000);
       
-      // Capture new clean background
+      // Capture new clean background (putter should be out of frame now)
       bg = grab();
       lastRect = null;
       lastRectHold = 0;
       
       beep();
-      show(`Background refreshed!\nNext putt: ${i+2} of ${PUTTS_TARGET}\nPlace putter in START ZONE`, "prominent");
-      await sleep(1800);
+      show(`Background refreshed!\nNext putt: ${i+2} of ${PUTTS_TARGET}\nReady when you are`, "prominent");
+      await sleep(1500);
       hide();
+      
+      // Now the captureOnePutt flow will handle waiting for putter in START ZONE
     }
   }
   return results;
