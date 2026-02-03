@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -281,7 +280,7 @@ function drawStartZone(w, h){
   ctx.font = "bold 18px 'Good Times', system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("Putter ZONE", zone.x + zone.w / 2, zone.y + zone.h / 2);
+  ctx.fillText("START ZONE", zone.x + zone.w / 2, zone.y + zone.h / 2);
   ctx.restore();
 }
 
@@ -918,8 +917,37 @@ async function runThree(){
   const results=[];
   for(let i=0;i<PUTTS_TARGET;i++){
     results.push(await captureOnePutt(i));
+    
     if(i<PUTTS_TARGET-1){
-      show(`Next putt\n${i+2} of ${PUTTS_TARGET}\nPlace putter in START ZONE`, "prominent");
+      // BACKGROUND REFRESH: Critical fix for detection between putts
+      show(`Putt ${i+1} complete!\nRemove putter from frame`, "prominent");
+      
+      // Wait for putter to be removed from frame
+      let putterGone = false;
+      while(!putterGone){
+        await sleep(200);
+        const checkFrame = grab();
+        const z = getZone(checkFrame.width, checkFrame.height);
+        const rect = detectHeadRectangle(bg, checkFrame, z, false, null);
+        
+        if(!rect){
+          // Putter appears to be gone, wait a bit more to be sure
+          await sleep(300);
+          const doubleCheck = grab();
+          const rect2 = detectHeadRectangle(bg, doubleCheck, z, false, null);
+          if(!rect2){
+            putterGone = true;
+          }
+        }
+      }
+      
+      // Capture new clean background
+      bg = grab();
+      lastRect = null;
+      lastRectHold = 0;
+      
+      beep();
+      show(`Background refreshed!\nNext putt: ${i+2} of ${PUTTS_TARGET}\nPlace putter in START ZONE`, "prominent");
       await sleep(1800);
       hide();
     }
@@ -963,11 +991,24 @@ async function renderResultReplay(all){
   const replayFrames = last.frames.map(frameToCanvas);
   const replayRects = last.rectangles;
 
-  const drawScene = (frameCanvas, rectIdx)=>{
+  const drawScene = (frameCanvas, rectIdx, showIndividualArcs=false, avgArcProgress=null)=>{
     ctx.clearRect(0,0,overlay.width,overlay.height);
     ctx.drawImage(frameCanvas, 0, 0);
-    for(const arc of whiteArcs) drawPolyline(arc, "rgba(255,255,255,0.9)", 6);
-    if(avgArc && avgArc.length>=2) drawPolyline(avgArc, "rgba(203,0,0,1)", 7);
+    
+    // Draw individual white arcs if requested
+    if(showIndividualArcs){
+      for(const arc of whiteArcs) drawPolyline(arc, "rgba(255,255,255,0.9)", 6);
+    }
+    
+    // Draw average arc progressively if provided
+    if(avgArc && avgArcProgress !== null){
+      const pointsToDraw = Math.min(avgArcProgress, avgArc.length);
+      if(pointsToDraw >= 2){
+        const partialArc = avgArc.slice(0, pointsToDraw);
+        drawPolyline(partialArc, "rgba(203,0,0,1)", 7);
+      }
+    }
+    
     if(replayRects[rectIdx]){
       drawRect(replayRects[rectIdx].corners, "rgba(203,0,0,1)", 6);
       drawFaceLine(replayRects[rectIdx].center, replayRects[rectIdx].faceAngle, 120, "rgba(255,255,255,0.95)", 6);
@@ -976,11 +1017,26 @@ async function renderResultReplay(all){
   };
 
   const total = replayFrames.length;
+  
+  // First: replay with individual arcs visible
   for(let i=0;i<total;i++){
-    drawScene(replayFrames[i], i);
+    drawScene(replayFrames[i], i, true, null);
     await sleep(1000/REPLAY_FPS);
   }
-  drawScene(replayFrames[total-1], total-1);
+  
+  // Second: slowly draw the average arc on final frame
+  if(avgArc && avgArc.length >= 2){
+    const avgDrawFrames = 60; // Number of frames to draw average arc over
+    const pointsPerFrame = avgArc.length / avgDrawFrames;
+    
+    for(let frame=0; frame<=avgDrawFrames; frame++){
+      const progress = Math.ceil(frame * pointsPerFrame);
+      drawScene(replayFrames[total-1], total-1, true, progress);
+      await sleep(1000/30); // 30fps for smooth drawing
+    }
+  } else {
+    drawScene(replayFrames[total-1], total-1, true, avgArc ? avgArc.length : 0);
+  }
 
   const stats = `deviation ${arcResult.maxDeviation.toFixed(0)}px · chord ${arcResult.chordAlongLine.toFixed(0)}px · ratio ${(arcResult.ratio*100).toFixed(2)}%`;
   let arcSvg = "";
