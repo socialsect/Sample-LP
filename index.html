@@ -379,10 +379,14 @@ function grab(){
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function computeROI(z, lastCenter){
   if(!lastCenter) return {x0:z.x, y0:z.y, x1:z.x+z.w, y1:z.y+z.h};
+  // Keep X constrained to zone for horizontal bounds
   const x0=clamp(lastCenter.x-ROI_PAD, z.x, z.x+z.w);
   const x1=clamp(lastCenter.x+ROI_PAD, z.x, z.x+z.w);
-  const y0=clamp(lastCenter.y-ROI_PAD, z.y, z.y+z.h);
-  const y1=clamp(lastCenter.y+ROI_PAD, z.y, z.y+z.h);
+  // Remove zone Y constraints but keep frame boundaries
+  // This allows the putter to be tracked properly when moving down
+  // Note: frame height is inferred from z context, but we'll clamp in detectHeadRectangle
+  const y0=lastCenter.y-ROI_PAD;
+  const y1=lastCenter.y+ROI_PAD;
   return {x0,y0,x1,y1};
 }
 
@@ -398,8 +402,11 @@ function detectHeadRectangle(bg, fr, z, useGate, lastCenter){
   const bandY1=Math.min(z.y+z.h, yLine+HEAD_BAND_HALF_PX);
 
   const roi=computeROI({x:z.x,y:bandY0,w:z.w,h:(bandY1-bandY0)}, lastCenter);
-  const xMin=roi.x0, xMax=roi.x1;
-  const yMin=roi.y0, yMax=roi.y1;
+  // Clamp ROI to actual frame bounds (not zone bounds)
+  const xMin=clamp(roi.x0, 0, w);
+  const xMax=clamp(roi.x1, 0, w);
+  const yMin=clamp(roi.y0, 0, h);
+  const yMax=clamp(roi.y1, 0, h);
 
   const gridW = Math.max(1, Math.floor((xMax-xMin)/STEP));
   const gridH = Math.max(1, Math.floor((yMax-yMin)/STEP));
