@@ -691,7 +691,10 @@ function ensureCountdownAudio(){
 }
 function playCountdownBeep(){
   const el = document.getElementById("countdownAudio");
-  if(!el) { beep(); return; }
+  // Always trigger an immediate Web Audio beep for tight sync with the visual timer,
+  // and layer the MP3 on top when available for consistent sound across devices.
+  beep();
+  if(!el) { return; }
   el.volume = 1;
   el.currentTime = 0;
   const p = el.play();
@@ -1149,6 +1152,10 @@ async function renderResultReplay(all){
       <button type="button" class="arc-training-btn" data-label="Straight">Straight</button>
       <button type="button" class="arc-training-btn" data-label="Slight Arc">Slight Arc</button>
       <button type="button" class="arc-training-btn" data-label="Strong Arc">Strong Arc</button>
+      <button type="button" class="arc-training-btn" data-label="Slight Arc to Straight">Slight Arc to Straight</button>
+      <button type="button" class="arc-training-btn" data-label="Straight to Slight Arc">Straight to Slight Arc</button>
+      <button type="button" class="arc-training-btn" data-label="Strong Arc to Straight">Strong Arc to Straight</button>
+      <button type="button" class="arc-training-btn" data-label="Straight to Strong Arc">Straight to Strong Arc</button>
     </div>
     <div class="arc-saved-msg" id="arcSavedMsg"></div>
     <button type="button" class="arc-export-btn">Export training data (${trainingCount} samples)</button>
