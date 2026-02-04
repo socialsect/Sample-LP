@@ -7,6 +7,9 @@
 <title>Putting – Arc Analyzer (Test-Track Foundation)</title>
 <link rel="preload" href="Fonts/good%20times%20rg.ttf" as="font" type="font/ttf" crossorigin="anonymous"/>
 <link rel="preload" href="Fonts/Avenir%20(1).ttc" as="font" type="font/ttc" crossorigin="anonymous"/>
+<audio id="countdownAudio" preload="auto" playsinline>
+  <source src="audios/countdown.mp3" type="audio/mpeg"/>
+</audio>
 <style>
 @font-face{
   font-family:'Good Times';
@@ -22,115 +25,143 @@
       url('/Fonts/Avenir%20(1).ttc') format('truetype');
   font-weight:normal;font-style:normal;font-display:swap;
 }
-:root{--safe-top:env(safe-area-inset-top);--safe-right:env(safe-area-inset-right);--safe-bottom:env(safe-area-inset-bottom);--safe-left:env(safe-area-inset-left);}
-html,body{margin:0;padding:0;background:#000;color:#fff;font-family:'Avenir',system-ui,-apple-system,sans-serif;height:100%;overflow:hidden;touch-action:manipulation}
-#wrap{position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000}
+:root{
+  --safe-top:env(safe-area-inset-top);--safe-right:env(safe-area-inset-right);--safe-bottom:env(safe-area-inset-bottom);--safe-left:env(safe-area-inset-left);
+  --runner-black:#0c0c0c;--runner-red:#e7222a;--runner-darkred:#ba1e1e;--runner-steel:#1f1f1f;
+  --radius-sm:6px;--radius-md:10px;--radius-lg:16px;--radius-xl:24px;
+}
+html,body{margin:0;padding:0;background:var(--runner-black);color:#fff;font-family:'Avenir',system-ui,-apple-system,sans-serif;height:100%;overflow:hidden;touch-action:manipulation}
+#wrap{position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:var(--runner-black)}
 video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #overlay{pointer-events:none}
 #btn{
   position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(18px + var(--safe-bottom));
-  background:linear-gradient(135deg,#cb0000,#8b0000);border:none;color:#fff;
+  bottom:calc(20px + var(--safe-bottom));
+  background:linear-gradient(135deg,var(--runner-red),var(--runner-darkred));border:none;color:#fff;
   font-family:'Good Times',system-ui,sans-serif;
-  font-size:18px;font-weight:900;
-  padding:14px 28px;border-radius:999px;cursor:pointer;z-index:10;
+  font-size:17px;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;
+  padding:14px 32px;border-radius:999px;cursor:pointer;z-index:10;
+  box-shadow:0 4px 20px rgba(231,34,42,0.35);transition:transform 0.2s ease,box-shadow 0.2s ease;
 }
+#btn:active{transform:translateX(-50%) scale(0.98);}
 #btnAnalyze{
   position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(72px + var(--safe-bottom));
-  background:linear-gradient(135deg,#cb0000,#8b0000);border:none;color:#fff;
+  bottom:calc(70px + var(--safe-bottom));
+  background:linear-gradient(135deg,var(--runner-red),var(--runner-darkred));border:none;color:#fff;
   font-family:'Avenir',system-ui,sans-serif;
-  font-size:14px;font-weight:700;
-  padding:10px 20px;border-radius:999px;cursor:pointer;z-index:10;
+  font-size:13px;font-weight:700;letter-spacing:0.5px;
+  padding:10px 24px;border-radius:999px;cursor:pointer;z-index:10;
+  box-shadow:0 3px 14px rgba(231,34,42,0.3);transition:transform 0.2s ease,opacity 0.2s ease;
 }
+#btnAnalyze:active:not(:disabled){transform:translateX(-50%) scale(0.98);}
 #btnAnalyze:disabled{opacity:0.4;cursor:not-allowed}
 #badge{
-  position:absolute;top:calc(14px + var(--safe-top));left:calc(14px + var(--safe-left));
+  position:absolute;bottom:calc(140px + var(--safe-bottom));left:calc(14px + var(--safe-left));
   font-family:'Avenir',system-ui,sans-serif;
-  font-size:14px;font-weight:900;
-  padding:10px 12px;border-radius:12px;
-  background:rgba(0,0,0,.55);
+  font-size:12px;font-weight:800;
+  padding:8px 12px;border-radius:var(--radius-md);
+  background:rgba(31,31,31,0.9);
+  border:1px solid rgba(255,255,255,0.08);
   opacity:1;z-index:10;
   white-space:pre-line;
+  max-width:180px;line-height:1.35;
 }
-#badge.prominent,#badge.countdown{
-  top:50%;left:50%;transform:translate(-50%,-50%);
+#badge.prominent,#badge.countdown{top:auto;left:auto;transform:none;}
+#badge.prominent{
+  bottom:calc(140px + var(--safe-bottom));left:50%;transform:translateX(-50%);
+  font-size:16px;max-width:320px;text-align:center;line-height:1.4;padding:14px 20px;
+  background:linear-gradient(180deg,rgba(31,31,31,0.95) 0%,rgba(12,12,12,0.98) 100%);
+  border:1px solid rgba(255,255,255,0.08);border-radius:var(--radius-lg);
+  box-shadow:0 12px 40px rgba(0,0,0,0.5);
 }
-#badge.prominent{font-size:18px;max-width:300px;text-align:center;line-height:1.4;padding:16px 24px;background:rgba(10,10,10,.9);border-radius:16px;border:2px solid rgba(203,0,0,.6);}
-#badge.countdown{font-size:100px;padding:30px 50px;background:rgba(0,0,0,.9);border-radius:30px;text-align:center;max-width:none;border:2px solid #cb0000;}
+#badge.countdown{
+  bottom:calc(140px + var(--safe-bottom));left:calc(20px + var(--safe-left));
+  font-size:42px;padding:16px 24px;
+  background:linear-gradient(180deg,rgba(31,31,31,0.95) 0%,rgba(12,12,12,0.98) 100%);
+  border:1px solid var(--runner-red);border-radius:var(--radius-lg);
+  box-shadow:0 4px 20px rgba(231,34,42,0.25);
+}
 #messageOverlay{
   position:absolute;inset:0;z-index:35;
   background:transparent;
-  display:none;align-items:center;justify-content:center;
-  padding:24px;pointer-events:none;
+  display:none;align-items:flex-end;justify-content:center;
+  padding:24px;padding-bottom:0;pointer-events:none;
 }
 #messageOverlay.show{display:flex;}
+#messageOverlay.countdown-mode{align-items:flex-end;justify-content:flex-start;padding-left:20px;padding-bottom:0;}
 .message-overlay-card{
   max-width:320px;width:90%;
-  padding:24px 28px;text-align:center;
-  background:rgba(10,10,10,0.92);
-  border-radius:20px;
-  border:2px solid rgba(203,0,0,0.8);
-  box-shadow:0 12px 40px rgba(0,0,0,0.8);
+  padding:18px 22px;text-align:center;
+  background:linear-gradient(180deg,rgba(31,31,31,0.95) 0%,rgba(12,12,12,0.98) 100%);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:var(--radius-lg);
+  box-shadow:0 12px 40px rgba(0,0,0,0.6);
   font-family:'Avenir',system-ui,-apple-system,sans-serif;
-  font-size:18px;line-height:1.45;color:#f8fafc;
+  font-size:16px;line-height:1.45;color:#f5f5f5;
+  margin-bottom:calc(130px + var(--safe-bottom));
 }
 .message-overlay-card.countdown{
   font-family:'Good Times',system-ui,sans-serif;
-  font-size:120px;font-weight:900;
-  padding:40px 60px;
+  font-size:48px;font-weight:900;
+  padding:16px 24px;width:auto;max-width:none;margin:0 0 calc(130px + var(--safe-bottom)) 0;
   color:#fff;
-  background:rgba(0,0,0,0.9);
-  border:2px solid #cb0000;
-  box-shadow:0 0 0 4px rgba(203,0,0,0.3);
+  background:linear-gradient(180deg,rgba(31,31,31,0.95) 0%,rgba(12,12,12,0.98) 100%);
+  border:1px solid var(--runner-red);
+  box-shadow:0 4px 24px rgba(231,34,42,0.2);
+  text-align:left;
 }
-.message-overlay-card.countdown .sub{font-family:'Avenir',system-ui,sans-serif;font-size:22px;margin-top:8px;opacity:0.95;}
+.message-overlay-card.countdown .sub{font-family:'Avenir',system-ui,sans-serif;font-size:14px;margin-top:4px;opacity:0.9;}
 #switchWrap{
   position:absolute;top:calc(14px + var(--safe-top));right:calc(14px + var(--safe-right));
-  z-index:10;background:rgba(0,0,0,.55);
-  padding:10px 12px;border-radius:12px;
+  z-index:10;background:rgba(31,31,31,0.85);
+  border:1px solid rgba(255,255,255,0.08);
+  padding:10px 14px;border-radius:var(--radius-md);
   display:flex;align-items:center;gap:10px;
   font-weight:900;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 #switchWrap .small{opacity:.85;font-size:12px;font-weight:800}
 #handed{
   width:52px;height:28px;appearance:none;outline:none;cursor:pointer;
-  border-radius:999px;background:#444;position:relative;
+  border-radius:999px;background:var(--runner-steel);position:relative;
 }
-#handed:checked{background:#e50914;}
+#handed:checked{background:var(--runner-red);}
 #handed::after{
   content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
   background:#fff;transition:transform .2s;
 }
 #handed:checked::after{transform:translateX(24px);}
 .arc-results-overlay{
-  position:absolute;inset:0;background:rgba(0,0,0,0.85);
+  position:absolute;inset:0;background:rgba(0,0,0,0.88);
   display:none;align-items:center;justify-content:center;z-index:40;padding:20px;
 }
 .arc-results-overlay.show{display:flex;}
 .arc-results-card{
-  width:min(400px,92vw);background:rgba(10,10,10,0.98);
-  border-radius:18px;border:2px solid rgba(203,0,0,0.7);
-  box-shadow:0 24px 80px rgba(0,0,0,0.9);padding:20px;
+  width:min(400px,92vw);
+  background:linear-gradient(180deg,rgba(31,31,31,0.98) 0%,rgba(12,12,12,0.99) 100%);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:var(--radius-lg);
+  box-shadow:0 24px 60px rgba(0,0,0,0.8);padding:20px;
   font-family:'Avenir',system-ui,-apple-system,sans-serif;
 }
 .arc-results-title{font-family:'Good Times',system-ui,sans-serif;font-size:18px;font-weight:800;margin-bottom:8px;color:#fff;}
-.arc-results-sub{font-size:12px;opacity:0.85;margin-bottom:12px;color:#e5e7eb;}
-.arc-results-main{font-family:'Good Times',system-ui,sans-serif;font-size:16px;font-weight:700;margin-bottom:10px;color:#f87171;}
-.arc-results-stats{font-size:11px;opacity:0.9;margin:8px 0;padding:8px 10px;background:rgba(0,0,0,.5);border-radius:10px;border:1px solid rgba(203,0,0,.3);color:#e5e7eb;}
+.arc-results-sub{font-size:12px;opacity:0.85;margin-bottom:12px;color:#cfcfcf;}
+.arc-results-main{font-family:'Good Times',system-ui,sans-serif;font-size:16px;font-weight:700;margin-bottom:10px;color:var(--runner-red);}
+.arc-results-stats{font-size:11px;opacity:0.9;margin:8px 0;padding:8px 10px;background:rgba(0,0,0,.4);border-radius:var(--radius-md);border:1px solid rgba(255,255,255,0.06);color:#cfcfcf;}
 .arc-results-viz{width:100%;height:56px;background:rgba(0,0,0,.5);border-radius:10px;margin:8px 0;display:block;}
 .arc-training-label{font-family:'Good Times',system-ui,sans-serif;font-size:12px;font-weight:700;margin:12px 0 6px;color:#fff;}
 .arc-training-btns{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
-.arc-training-btn{flex:1;min-width:80px;padding:10px 12px;border:1px solid rgba(203,0,0,.5);border-radius:999px;background:rgba(20,20,20,.95);color:#e5e7eb;font-family:'Avenir',system-ui,sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
-.arc-training-btn.selected{border-color:#cb0000;background:rgba(203,0,0,.35);color:#fff;}
-.arc-export-btn{width:100%;padding:8px 12px;margin-top:6px;border:1px solid rgba(203,0,0,.4);border-radius:999px;background:rgba(10,10,10,.95);color:#94a3b8;font-family:'Avenir',system-ui,sans-serif;font-size:11px;cursor:pointer;}
+.arc-training-btn{flex:1;min-width:80px;padding:10px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:999px;background:rgba(31,31,31,0.9);color:#cfcfcf;font-family:'Avenir',system-ui,sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+.arc-training-btn.selected{border-color:var(--runner-red);background:rgba(231,34,42,0.2);color:#fff;}
+.arc-export-btn{width:100%;padding:8px 12px;margin-top:6px;border:1px solid rgba(255,255,255,0.12);border-radius:999px;background:rgba(31,31,31,0.9);color:#94a3b8;font-family:'Avenir',system-ui,sans-serif;font-size:11px;cursor:pointer;}
 .arc-saved-msg{font-size:11px;color:#86efac;margin-top:4px;}
 .arc-results-footer{font-size:11px;opacity:0.75;margin-top:8px;color:#94a3b8;}
 #resultLabel{
   position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(72px + var(--safe-bottom));padding:8px 16px;border-radius:999px;
-  background:rgba(0,0,0,.85);border:1px solid #cb0000;
-  color:#fff;font-family:'Good Times',system-ui,sans-serif;font-size:12px;z-index:10;text-align:center;opacity:0;
+  bottom:calc(70px + var(--safe-bottom));padding:8px 18px;border-radius:999px;
+  background:rgba(31,31,31,0.95);border:1px solid var(--runner-red);
+  color:#fff;font-family:'Good Times',system-ui,sans-serif;font-size:12px;font-weight:800;z-index:10;text-align:center;opacity:0;
+  box-shadow:0 4px 16px rgba(0,0,0,0.5);
 }
 </style>
 </head>
@@ -210,7 +241,8 @@ const REPLAY_FPS = 22;
 
 const START_ZONE_W = 210;
 const START_ZONE_H = 280;
-const COUNTDOWN_DURATION = 700;
+const COUNTDOWN_DURATION = 3000;
+const COUNTDOWN_STEPS = 3;
 
 const ARC_TRAINING_KEY = "arcAnalyzerFromTestTrack";
 
@@ -616,6 +648,7 @@ function show(t, style){
   const useOverlay = style === "prominent" || style === "countdown";
   if(useOverlay && messageOverlay && messageOverlayCard){
     messageOverlayCard.className = "message-overlay-card" + (isCountdown ? " countdown" : "");
+    messageOverlay.classList.toggle("countdown-mode", isCountdown);
     if(isCountdown && lines.length > 1){
       messageOverlayCard.innerHTML = "<span>" + lines[0] + "</span><div class=\"sub\">" + lines.slice(1).join("<br>") + "</div>";
     } else {
@@ -624,14 +657,14 @@ function show(t, style){
     messageOverlay.classList.add("show");
     badge.style.opacity = 0;
   } else {
-    if(messageOverlay) messageOverlay.classList.remove("show");
+    if(messageOverlay){ messageOverlay.classList.remove("show","countdown-mode"); }
     badge.textContent = t;
     badge.style.opacity = 1;
     badge.classList.remove("prominent", "countdown");
   }
 }
 function hide(){
-  if(messageOverlay) messageOverlay.classList.remove("show");
+  if(messageOverlay) messageOverlay.classList.remove("show","countdown-mode");
   badge.style.opacity = 0;
   badge.classList.remove("prominent", "countdown");
 }
@@ -643,6 +676,26 @@ function beep(){
   o.connect(g); g.connect(a.destination);
   o.frequency.value=880; g.gain.value=0.15;
   o.start(); setTimeout(()=>{o.stop();a.close();},120);
+}
+
+/* F1-style countdown beep – uses countdown.mp3 for cross-device audio (iOS/Android/Windows) */
+let countdownAudioUnlocked = false;
+function ensureCountdownAudio(){
+  if(countdownAudioUnlocked) return;
+  const el = document.getElementById("countdownAudio");
+  if(!el) return;
+  el.volume = 0;
+  el.currentTime = 0;
+  el.play().then(()=>{ el.volume = 1; el.pause(); el.currentTime = 0; }).catch(()=>{});
+  countdownAudioUnlocked = true;
+}
+function playCountdownBeep(){
+  const el = document.getElementById("countdownAudio");
+  if(!el) { beep(); return; }
+  el.volume = 1;
+  el.currentTime = 0;
+  const p = el.play();
+  if(p && typeof p.then === "function") p.catch(()=>{ beep(); });
 }
 
 btn.onclick = async ()=>{
@@ -895,15 +948,17 @@ async function captureOnePutt(i){
   }
 
   beep();
-  
-  const countdownSteps = Math.ceil(COUNTDOWN_DURATION / 100);
-  const stepDuration = COUNTDOWN_DURATION / countdownSteps;
-  
-  for(let step = countdownSteps; step > 0; step--){
+
+  ensureCountdownAudio();
+  const stepDuration = COUNTDOWN_DURATION / COUNTDOWN_STEPS;
+
+  for(let step = COUNTDOWN_STEPS; step > 0; step--){
     show(`${step}\nGet ready`, "countdown");
+    playCountdownBeep();
     await sleep(stepDuration);
   }
   show("GO!\nPutt!", "countdown");
+  playCountdownBeep();
   await sleep(200);
 
   show(`Recording!\nPutt ${i+1} of ${PUTTS_TARGET}`, "prominent");
@@ -1009,11 +1064,11 @@ async function renderResultReplay(all){
       const pointsToDraw = Math.min(avgArcProgress, avgArc.length);
       if(pointsToDraw >= 2){
         const partialArc = avgArc.slice(0, pointsToDraw);
-        drawPolyline(partialArc, "rgba(203,0,0,1)", 7);
+        drawPolyline(partialArc, "rgba(231,34,42,1)", 7);
       }
     }
     if(replayRects[rectIdx]){
-      drawRect(replayRects[rectIdx].corners, "rgba(203,0,0,1)", 6);
+      drawRect(replayRects[rectIdx].corners, "rgba(231,34,42,1)", 6);
       drawFaceLine(replayRects[rectIdx].center, replayRects[rectIdx].faceAngle, 120, "rgba(255,255,255,0.95)", 6);
     }
   };
@@ -1071,12 +1126,12 @@ async function renderResultReplay(all){
     
     const pathD=avgArc.map((p,i)=>(i?"L":"M")+toSx(p.x).toFixed(1)+","+toSy(p.y).toFixed(1)).join(" ");
     arcSvg=`<svg class="arc-results-viz" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
-      <line x1="0" y1="${ballSvgY}" x2="${w}" y2="${ballSvgY}" stroke="rgba(239,68,68,.9)" stroke-width="1.5"/>
-      <line x1="${faceSvgX}" y1="0" x2="${faceSvgX}" y2="${h}" stroke="rgba(239,68,68,.9)" stroke-width="1.5"/>
-      <line x1="${arrowXBase}" y1="${arrowY}" x2="${arrowXTip}" y2="${arrowY}" stroke="rgba(239,68,68,.9)" stroke-width="1.5" stroke-linecap="round"/>
-      <polygon points="${LH ? `${arrowXTip},${arrowY} ${arrowXTip+arrowHead},${arrowY-arrowHead} ${arrowXTip+arrowHead},${arrowY+arrowHead}` : `${arrowXTip},${arrowY} ${arrowXTip-arrowHead},${arrowY-arrowHead} ${arrowXTip-arrowHead},${arrowY+arrowHead}`}" fill="rgba(239,68,68,.9)"/>
+      <line x1="0" y1="${ballSvgY}" x2="${w}" y2="${ballSvgY}" stroke="rgba(231,34,42,.9)" stroke-width="1.5"/>
+      <line x1="${faceSvgX}" y1="0" x2="${faceSvgX}" y2="${h}" stroke="rgba(231,34,42,.9)" stroke-width="1.5"/>
+      <line x1="${arrowXBase}" y1="${arrowY}" x2="${arrowXTip}" y2="${arrowY}" stroke="rgba(231,34,42,.9)" stroke-width="1.5" stroke-linecap="round"/>
+      <polygon points="${LH ? `${arrowXTip},${arrowY} ${arrowXTip+arrowHead},${arrowY-arrowHead} ${arrowXTip+arrowHead},${arrowY+arrowHead}` : `${arrowXTip},${arrowY} ${arrowXTip-arrowHead},${arrowY-arrowHead} ${arrowXTip-arrowHead},${arrowY+arrowHead}`}" fill="rgba(231,34,42,.9)"/>
       <circle cx="${ballSvgX}" cy="${ballSvgY}" r="${ballSvgR}" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-      <path d="${pathD}" fill="none" stroke="rgba(203,0,0,1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${pathD}" fill="none" stroke="rgba(231,34,42,1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   }
   const trainingCount = getTrainingData().length;
@@ -1122,6 +1177,7 @@ async function renderResultReplay(all){
 
 btnAnalyze.addEventListener("click", async ()=>{
   if(!tracking || !bg || state !== "IDLE") return;
+  ensureCountdownAudio();
   state = "RUNNING";
   btnAnalyze.disabled = true;
   try{
@@ -1134,3 +1190,6 @@ btnAnalyze.addEventListener("click", async ()=>{
 </script>
 </body>
 </html>
+<!-- Updated version with sync with https://github.com/socialsect/Sample-LP/blob/main/index.html on commit "
+Add arrow visualization to SVG output
+" at 04-04-2026-->
